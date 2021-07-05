@@ -13,11 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-while getopts ":ht:i:" opt; do
+while getopts ":hp:t:i:" opt; do
   case "${opt}" in
-    h) echo "-t: tag name"
+    h) echo "-p: project name"
+       echo "-t: tag name"
        echo "-i: image name. If provided, project name and tag name are not necessary"
        exit
+      ;;
+    p) PROJECT_ID=${OPTARG}
       ;;
     t) TAG_NAME=${OPTARG}
       ;;
@@ -36,7 +39,18 @@ rsync -arvp ../common/ ./build/
 LOCAL_LAUNCHER_IMAGE_NAME=ml-pipeline-kubeflow-pytorchjob
 
 docker build -t ${LOCAL_LAUNCHER_IMAGE_NAME} .
-docker tag ${LOCAL_LAUNCHER_IMAGE_NAME} ${LAUNCHER_IMAGE_NAME}:${TAG_NAME}
-docker push ${LAUNCHER_IMAGE_NAME}:${TAG_NAME}
+if [ -z "${TAG_NAME}" ]; then
+  TAG_NAME=$(date +v%Y%m%d)-$(git describe --tags --always --dirty)-$(git diff | shasum -a256 | cut -c -6)
+fi
+if [ -z "${LAUNCHER_IMAGE_NAME}" ]; then
+  if [ -z "${PROJECT_ID}" ]; then
+    PROJECT_ID=$(gcloud config config-helper --format "value(configuration.properties.core.project)")
+  fi
+  docker tag ${LOCAL_LAUNCHER_IMAGE_NAME} gcr.io/${PROJECT_ID}/${LOCAL_LAUNCHER_IMAGE_NAME}:${TAG_NAME}
+  docker push gcr.io/${PROJECT_ID}/${LOCAL_LAUNCHER_IMAGE_NAME}:${TAG_NAME}
+else
+  docker tag ${LOCAL_LAUNCHER_IMAGE_NAME} ${LAUNCHER_IMAGE_NAME}:${TAG_NAME}
+  docker push ${LAUNCHER_IMAGE_NAME}:${TAG_NAME}
+fi
 
 rm -rf ./build
